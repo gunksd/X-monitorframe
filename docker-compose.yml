@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  twitter-monitor:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - TWITTER_BEARER_TOKEN=${TWITTER_BEARER_TOKEN}
+      - WECHAT_WEBHOOK_URL=${WECHAT_WEBHOOK_URL}
+      - TWITTER_USERNAMES=${TWITTER_USERNAMES}
+      - CHECK_INTERVAL_SECONDS=${CHECK_INTERVAL_SECONDS:-300}
+      - AUTO_START_MONITORING=${AUTO_START_MONITORING:-false}
+      - DATABASE_URL=sqlite:///./data/twitter_monitor.db
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+    restart: unless-stopped
