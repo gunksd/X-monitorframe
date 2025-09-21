@@ -16,6 +16,7 @@ class MonitorService:
         self.is_monitoring = False
         self.monitor_task: Optional[asyncio.Task] = None
         self.last_tweet_ids: Dict[str, str] = {}
+        self.current_user_index = 0  # 轮换用户索引，避免同时处理多个用户
         
     async def start_monitoring(self):
         if self.is_monitoring:
@@ -62,10 +63,19 @@ class MonitorService:
             return
             
         try:
-            all_tweets = await self.twitter_service.get_multiple_users_tweets(
-                usernames,
-                self.last_tweet_ids
-            )
+            # 极度保守策略：每次只处理一个用户，避免任何API调用集中
+            # 轮换用户 - 每次只处理一个
+            current_username = usernames[self.current_user_index]
+            self.current_user_index = (self.current_user_index + 1) % len(usernames)
+
+            logger.info(f"🔄 轮换监控用户: @{current_username} ({self.current_user_index}/{len(usernames)})")
+            logger.info(f"⚠️  Free Tier限制: 每个用户15分钟内只能调用1次API")
+
+            since_id = self.last_tweet_ids.get(current_username)
+            user_tweets = await self.twitter_service.get_user_tweets(current_username, since_id)
+
+            all_tweets = {current_username: user_tweets}
+            logger.info(f"📊 本轮处理完成用户 @{current_username}，下次轮换到该用户需等待15分钟")
             
             for username, tweets in all_tweets.items():
                 if tweets:

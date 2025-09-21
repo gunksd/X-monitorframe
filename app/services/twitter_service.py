@@ -98,7 +98,7 @@ class TwitterService:
             self.last_api_reset = current_time
 
         self.api_call_count += 1
-        logger.info(f"API调用计数: {self.api_call_count}/300 (15分钟内)")
+        logger.info(f"API调用计数: {self.api_call_count} (Free Tier: 1次/15分钟限制)")
 
     async def get_user_tweets(self, username: str, since_id: Optional[str] = None) -> List[Dict]:
         # 如果处于速率限制状态，直接返回空列表
@@ -121,7 +121,7 @@ class TwitterService:
                 self.user_id_cache[username] = user_id
                 logger.info(f"Cached user ID for {username}: {user_id}")
                 # 在用户ID获取后增加延迟
-                await asyncio.sleep(3)
+                await asyncio.sleep(8)
 
             # 获取用户推文
             self._track_api_call()  # 跟踪API调用
@@ -136,7 +136,7 @@ class TwitterService:
             )
 
             # 在推文获取后增加延迟，避免连续API请求
-            await asyncio.sleep(2)
+            await asyncio.sleep(5)
 
             if not tweets.data:
                 return []
