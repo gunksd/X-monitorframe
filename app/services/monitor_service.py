@@ -55,13 +55,14 @@ class MonitorService:
             self.is_monitoring = False
     
     async def _check_tweets(self):
-        if not settings.TWITTER_USERNAMES:
+        usernames = settings.twitter_usernames_list
+        if not usernames:
             logger.warning("No Twitter usernames configured for monitoring")
             return
             
         try:
             all_tweets = await self.twitter_service.get_multiple_users_tweets(
-                settings.TWITTER_USERNAMES,
+                usernames,
                 self.last_tweet_ids
             )
             
@@ -115,7 +116,7 @@ class MonitorService:
     async def _load_last_tweet_ids(self):
         try:
             async with get_db() as db:
-                for username in settings.TWITTER_USERNAMES:
+                for username in settings.twitter_usernames_list:
                     result = await db.execute(
                         "SELECT tweet_id FROM tweet_records WHERE username = ? ORDER BY created_at DESC LIMIT 1",
                         (username,)

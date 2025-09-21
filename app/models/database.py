@@ -40,10 +40,19 @@ async def init_db():
             ''')
             
             await db.execute('''
-                CREATE INDEX IF NOT EXISTS idx_tweet_id 
+                CREATE INDEX IF NOT EXISTS idx_tweet_id
                 ON tweet_records(tweet_id)
             ''')
-            
+
+            # 添加速率限制状态表
+            await db.execute('''
+                CREATE TABLE IF NOT EXISTS rate_limit_status (
+                    id INTEGER PRIMARY KEY,
+                    rate_limited_until REAL,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+
             await db.commit()
             logger.info("Database initialized successfully")
             

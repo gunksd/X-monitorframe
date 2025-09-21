@@ -78,21 +78,46 @@ class WeChatService:
         text = tweet_data.get('text', '')
         url = tweet_data.get('url', '')
         metrics = tweet_data.get('metrics', {})
-        
+        media = tweet_data.get('media', [])
+
         formatted_text = text[:200] + "..." if len(text) > 200 else text
-        
-        message = f"""## 🐦 新推文监控提醒
 
-**用户**: @{username}
+        message = f"""## 🐦 @{username} 发布了新推文
+
 **内容**: {formatted_text}
+"""
 
+        # 添加媒体信息
+        if media:
+            message += "\n**媒体内容**:\n"
+            for i, media_item in enumerate(media, 1):
+                media_type = media_item.get('type', 'unknown')
+                if media_type == 'photo':
+                    image_url = media_item.get('url') or media_item.get('preview_image_url')
+                    if image_url:
+                        message += f"- 🖼️ [图片{i}]({image_url})\n"
+                elif media_type == 'video':
+                    preview_url = media_item.get('preview_image_url')
+                    if preview_url:
+                        message += f"- 🎥 [视频{i}预览]({preview_url})\n"
+                elif media_type == 'animated_gif':
+                    preview_url = media_item.get('preview_image_url')
+                    if preview_url:
+                        message += f"- 🎞️ [动图{i}]({preview_url})\n"
+
+                # 添加alt文本（如果有的话）
+                alt_text = media_item.get('alt_text')
+                if alt_text:
+                    message += f"  描述: {alt_text}\n"
+
+        message += f"""
 **数据**:
 - 👍 点赞: {metrics.get('likes', 0)}
 - 🔄 转推: {metrics.get('retweets', 0)}
 - 💬 回复: {metrics.get('replies', 0)}
 
-[查看推文]({url})"""
-        
+[查看原推文]({url})"""
+
         return message
     
     def validate_webhook(self) -> bool:
