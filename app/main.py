@@ -8,9 +8,13 @@ from app.config import settings
 from app.services.twitter_service import TwitterService
 from app.services.wechat_service import WeChatService
 from app.services.monitor_service import MonitorService
+from app.utils.web_logger import setup_web_logging, get_web_logs
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# 设置web日志
+setup_web_logging()
 
 monitor_service = None
 templates = Jinja2Templates(directory="app/templates")
@@ -115,32 +119,18 @@ async def get_monitored_users():
 async def get_logs():
     """获取系统日志"""
     import datetime
-    now = datetime.datetime.now().strftime("%H:%M:%S")
 
-    # 构建更详细的日志信息
-    logs = []
+    # 获取web日志
+    web_logs = get_web_logs()
 
-    # 系统状态信息
-    if monitor_service:
-        if monitor_service.is_monitoring:
-            logs.append(f"[{now}] INFO: ✅ 监控服务正在运行")
-            logs.append(f"[{now}] INFO: 📊 监控用户数: {len(settings.twitter_usernames_list)}")
-            logs.append(f"[{now}] INFO: ⏰ 检查间隔: {settings.CHECK_INTERVAL_SECONDS}秒")
-            logs.append(f"[{now}] WARNING: ⚠️  Twitter API 速率限制生效中")
-            logs.append(f"[{now}] INFO: 💤 等待速率限制重置...")
-        else:
-            logs.append(f"[{now}] INFO: ⏹️  监控服务已停止")
-    else:
-        logs.append(f"[{now}] ERROR: ❌ 监控服务未初始化")
-
-    # 用户列表
-    logs.append(f"[{now}] INFO: 👥 监控用户列表:")
-    for username in settings.twitter_usernames_list:
-        logs.append(f"[{now}] INFO:   - @{username}")
+    # 如果没有日志，添加一些状态信息
+    if not web_logs:
+        now = datetime.datetime.now().strftime("%H:%M:%S")
+        web_logs = [f"[{now}] INFO: 系统初始化完成，等待监控事件..."]
 
     return {
-        "logs": logs,
-        "timestamp": now
+        "logs": web_logs,
+        "timestamp": datetime.datetime.now().strftime("%H:%M:%S")
     }
 
 @app.post("/webhook/test")

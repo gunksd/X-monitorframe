@@ -17,6 +17,8 @@ class TwitterService:
         )
         self.rate_limited_until = None
         self.user_id_cache = {}  # 缓存用户ID，避免重复API调用
+        self.api_call_count = 0  # API调用计数器
+        self.last_api_reset = time.time()  # 最后一次重置计数器的时间
         # 初始化时从数据库加载速率限制状态
         asyncio.create_task(self._load_rate_limit_from_db())
         
@@ -87,6 +89,17 @@ class TwitterService:
             return remaining
         return None
 
+    def _track_api_call(self):
+        """跟踪API调用数量"""
+        current_time = time.time()
+        # 每15分钟重置计数器
+        if current_time - self.last_api_reset > 900:  # 15分钟
+            self.api_call_count = 0
+            self.last_api_reset = current_time
+
+        self.api_call_count += 1
+        logger.info(f"API调用计数: {self.api_call_count}/300 (15分钟内)")
+
     async def get_user_tweets(self, username: str, since_id: Optional[str] = None) -> List[Dict]:
         # 如果处于速率限制状态，直接返回空列表
         if await self._check_rate_limit():
@@ -94,28 +107,37 @@ class TwitterService:
             return []
 
         try:
-            # 尝试从缓存获取用户ID
+            # 直接通过用户名获取推文，减少API调用
+            # 先获取用户信息和推文（但只在必要时获取用户ID）
             user_id = self.user_id_cache.get(username)
             if not user_id:
+                # 只在缓存中没有时才调用获取用户API
+                self._track_api_call()  # 跟踪API调用
                 user = self.client.get_user(username=username)
                 if not user.data:
                     logger.error(f"User {username} not found")
                     return []
                 user_id = user.data.id
-                # 缓存用户ID
                 self.user_id_cache[username] = user_id
                 logger.info(f"Cached user ID for {username}: {user_id}")
+                # 在用户ID获取后增加延迟
+                await asyncio.sleep(3)
 
+            # 获取用户推文
+            self._track_api_call()  # 跟踪API调用
             tweets = self.client.get_users_tweets(
                 id=user_id,
-                max_results=10,
+                max_results=5,  # 减少每次获取的推文数量
                 since_id=since_id,
-                tweet_fields=['created_at', 'text', 'public_metrics', 'context_annotations', 'attachments'],
+                tweet_fields=['created_at', 'text', 'public_metrics', 'attachments'],
                 expansions=['attachments.media_keys'],
                 media_fields=['type', 'url', 'preview_image_url', 'alt_text'],
                 exclude=['retweets', 'replies']
             )
-            
+
+            # 在推文获取后增加延迟，避免连续API请求
+            await asyncio.sleep(2)
+
             if not tweets.data:
                 return []
             
@@ -182,9 +204,9 @@ class TwitterService:
                 tweets = await self.get_user_tweets(username, since_id)
                 results[username] = tweets
                 
-                # 在用户之间添加小延迟避免过快请求
+                # 在用户之间添加延迟避免过快请求
                 if len(usernames) > 1:
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(5)  # 增加到5秒延迟
                     
             except Exception as e:
                 logger.error(f"Error processing user {username}: {str(e)}")
@@ -194,6 +216,7 @@ class TwitterService:
     
     def validate_credentials(self) -> bool:
         try:
+            self._track_api_call()  # 跟踪API调用
             me = self.client.get_me()
             return me.data is not None
         except Exception as e:

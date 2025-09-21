@@ -19,21 +19,22 @@ class MonitorService:
         
     async def start_monitoring(self):
         if self.is_monitoring:
-            logger.warning("Monitoring is already active")
+            logger.warning("监控已经在运行中")
             return
-            
+
         await init_db()
         await self._load_last_tweet_ids()
-        
+
         self.is_monitoring = True
         self.monitor_task = asyncio.create_task(self._monitoring_loop())
-        logger.info("Started Twitter monitoring")
+        usernames = ', '.join([f'@{u}' for u in settings.twitter_usernames_list])
+        logger.info(f"🚀 开始监控 Twitter 用户: {usernames}")
         
     async def stop_monitoring(self):
         if not self.is_monitoring:
-            logger.warning("Monitoring is not active")
+            logger.warning("监控未在运行")
             return
-            
+
         self.is_monitoring = False
         if self.monitor_task:
             self.monitor_task.cancel()
@@ -41,7 +42,7 @@ class MonitorService:
                 await self.monitor_task
             except asyncio.CancelledError:
                 pass
-        logger.info("Stopped Twitter monitoring")
+        logger.info("⏹️ 已停止 Twitter 监控")
     
     async def _monitoring_loop(self):
         try:
@@ -99,19 +100,25 @@ class MonitorService:
     
     async def _process_new_tweet(self, tweet_data: dict):
         try:
+            tweet_id = tweet_data['id']
+            author = tweet_data['author']
+            tweet_text = tweet_data['text'][:50] + '...' if len(tweet_data['text']) > 50 else tweet_data['text']
+
+            logger.info(f"🐦 检测到新推文: @{author} - {tweet_text}")
+
             # Save to database
             await self._save_tweet_record(tweet_data)
-            
+
             # Send notification
             success = await self.wechat_service.send_tweet_notification(tweet_data)
-            
+
             if success:
-                logger.info(f"Notification sent for tweet {tweet_data['id']} from @{tweet_data['author']}")
+                logger.info(f"✅ 成功转发推文到企业微信: @{author} ({tweet_id})")
             else:
-                logger.error(f"Failed to send notification for tweet {tweet_data['id']}")
-                
+                logger.error(f"❌ 转发推文失败: @{author} ({tweet_id})")
+
         except Exception as e:
-            logger.error(f"Error processing new tweet {tweet_data['id']}: {str(e)}")
+            logger.error(f"❌ 处理推文时发生错误 {tweet_data.get('id', 'unknown')}: {str(e)}")
     
     async def _load_last_tweet_ids(self):
         try:
